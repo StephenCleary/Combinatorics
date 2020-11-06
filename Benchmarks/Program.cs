@@ -45,6 +45,14 @@ namespace Benchmarks
                 ;
         }
 
+        [BenchmarkCategory("Enumerate"), Benchmark]
+        public void EnumerateMutate()
+        {
+            var permutations = new LocalCombinatorics.Permutations<int>(_source, LocalCombinatorics.GenerateOptions.AllowMutation, null);
+            foreach (var p in permutations)
+                ;
+        }
+
         [BenchmarkCategory("Count0"), Benchmark(Baseline = true)]
         public void Count0Old()
         {

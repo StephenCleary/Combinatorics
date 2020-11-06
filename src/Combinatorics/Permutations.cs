@@ -34,7 +34,7 @@ namespace Combinatorics.Collections
         /// </summary>
         /// <param name="values">List of values to permute.</param>
         public Permutations(IEnumerable<T> values)
-            : this(values, GenerateOption.WithoutRepetition, null)
+            : this(values, GenerateOptions.None, null)
         {
         }
 
@@ -58,7 +58,7 @@ namespace Combinatorics.Collections
         /// <param name="values">List of values to permute.</param>
         /// <param name="comparer">Comparer used for defining the lexicographic order.</param>
         public Permutations(IEnumerable<T> values, IComparer<T>? comparer)
-            : this(values, GenerateOption.WithoutRepetition, comparer)
+            : this(values, GenerateOptions.None, comparer)
         {
         }
 
@@ -70,6 +70,19 @@ namespace Combinatorics.Collections
         /// <param name="type">The type of permutation set to calculate.</param>
         /// <param name="comparer">Comparer used for defining the lexicographic order.</param>
         public Permutations(IEnumerable<T> values, GenerateOption type, IComparer<T>? comparer)
+            : this(values, type == GenerateOption.WithRepetition ? GenerateOptions.WithRepetition : GenerateOptions.None, comparer)
+        {
+
+        }
+
+        /// <summary>
+        /// Create a permutation set from the provided list of values.  
+        /// If type is MetaCollectionType.WithholdRepetitionSets, then the values will be compared using the supplied IComparer.
+        /// </summary>
+        /// <param name="values">List of values to permute.</param>
+        /// <param name="flags">The type of permutation set to calculate.</param>
+        /// <param name="comparer">Comparer used for defining the lexicographic order.</param>
+        public Permutations(IEnumerable<T> values, GenerateOptions flags, IComparer<T>? comparer)
         {
             _ = values ?? throw new ArgumentNullException(nameof(values));
 
@@ -91,11 +104,11 @@ namespace Combinatorics.Collections
             // Input array:          {A A B C D E E}
             // Lexicographic Orders: {1 1 2 3 4 5 5}
 
-            Type = type;
+            Flags = flags;
             _myValues = values.ToList();
             _myLexicographicOrders = new int[_myValues.Count];
 
-            if (type == GenerateOption.WithRepetition)
+            if (Type == GenerateOption.WithRepetition)
             {
                 for (var i = 0; i < _myLexicographicOrders.Length; ++i)
                 {
@@ -124,7 +137,7 @@ namespace Combinatorics.Collections
                 }
             }
 
-            Count = GetCount();
+            _count = new Lazy<BigInteger>(GetCount);
         }
 
         /// <summary>
@@ -200,10 +213,10 @@ namespace Combinatorics.Collections
             {
                 get
                 {
-                    if (_myPosition == Position.InSet)
-                        return new List<T>(_myValues);
+                    if (_myPosition != Position.InSet)
+                        throw new InvalidOperationException();
 
-                    throw new InvalidOperationException();
+                    return _myParent.AllowMutation ? _myValues : new List<T>(_myValues);
                 }
             }
 
@@ -226,6 +239,8 @@ namespace Combinatorics.Collections
             /// </remarks>
             private bool NextPermutation()
             {
+                T valueTemp;
+                int orderTemp;
                 var i = _myLexicographicalOrders.Length - 1;
 
                 while (_myLexicographicalOrders[i - 1] >= _myLexicographicalOrders[i])
@@ -244,7 +259,7 @@ namespace Combinatorics.Collections
                     --j;
                 }
 
-                Swap(i - 1, j - 1);
+                Swap(i - 1, j - 1, out valueTemp, out orderTemp);
 
                 ++i;
 
@@ -252,7 +267,7 @@ namespace Combinatorics.Collections
 
                 while (i < j)
                 {
-                    Swap(i - 1, j - 1);
+                    Swap(i - 1, j - 1, out valueTemp, out orderTemp);
                     ++i;
                     --j;
                 }
@@ -263,20 +278,15 @@ namespace Combinatorics.Collections
             /// Helper function for swapping two elements within the internal collection.
             /// This swaps both the lexicographical order and the values, maintaining the parallel array.
             /// </summary>
-            private void Swap(int i, int j)
+            private void Swap(int i, int j, out T valueTemp, out int orderTemp)
             {
-                var temp = _myValues[i];
+                valueTemp = _myValues[i];
                 _myValues[i] = _myValues[j];
-                _myValues[j] = temp;
-                _myKviTemp = _myLexicographicalOrders[i];
+                _myValues[j] = valueTemp;
+                orderTemp = _myLexicographicalOrders[i];
                 _myLexicographicalOrders[i] = _myLexicographicalOrders[j];
-                _myLexicographicalOrders[j] = _myKviTemp;
+                _myLexicographicalOrders[j] = orderTemp;
             }
-
-            /// <summary>
-            /// Single instance of swap variable for int, small performance improvement over declaring in Swap function scope.
-            /// </summary>
-            private int _myKviTemp;
 
             /// <summary>
             /// Flag indicating the position of the enumerator.
@@ -317,12 +327,17 @@ namespace Combinatorics.Collections
         /// I.e., count of permutations of "AAB" will be 3 instead of 6.  
         /// If <see cref="Type"/> is <see cref="GenerateOption.WithRepetition"/>, then this is all combinations and is therefore N!, where N is the number of values in the input set.
         /// </summary>
-        public BigInteger Count { get; }
+        public BigInteger Count => _count.Value;
+
+        /// <summary>
+        /// The flags used to generate the result sets.
+        /// </summary>
+        public GenerateOptions Flags { get; }
 
         /// <summary>
         /// The type of permutations set that is generated.
         /// </summary>
-        public GenerateOption Type { get; }
+        public GenerateOption Type => (Flags & GenerateOptions.WithRepetition) != 0 ? GenerateOption.WithRepetition : GenerateOption.WithoutRepetition;
 
         /// <summary>
         /// The upper index of the meta-collection, equal to the number of items in the input set.
@@ -334,6 +349,8 @@ namespace Combinatorics.Collections
         /// This is always equal to <see cref="UpperIndex"/>.
         /// </summary>
         public int LowerIndex => _myValues.Count;
+
+        private bool AllowMutation => (Flags & GenerateOptions.AllowMutation) != 0;
 
         /// <summary>
         /// Calculates the total number of permutations that will be returned.  
@@ -384,5 +401,10 @@ namespace Combinatorics.Collections
         /// comparing T each time, much faster to let the CLR optimize around integers.
         /// </summary>
         private readonly int[] _myLexicographicOrders;
+
+        /// <summary>
+        /// Lazy-calculated <see cref="Count"/>.
+        /// </summary>
+        private readonly Lazy<BigInteger> _count;
     }
 }
