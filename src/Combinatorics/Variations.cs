@@ -196,7 +196,7 @@ namespace Combinatorics.Collections
             public EnumeratorWithoutRepetition(Variations<T> source)
             {
                 _myParent = source;
-                _myPermutationsEnumerator = (Permutations<int>.Enumerator)_myParent._myPermutations!.GetEnumerator();
+                _myPermutationsEnumerator = _myParent._myPermutations!.GetEnumerator();
             }
 
             void IEnumerator.Reset() => throw new NotSupportedException();
@@ -290,7 +290,7 @@ namespace Combinatorics.Collections
             /// <summary>
             /// An enumerator of the parents list of lexicographic orderings.
             /// </summary>
-            private readonly Permutations<int>.Enumerator _myPermutationsEnumerator;
+            private readonly IEnumerator<IReadOnlyList<int>> _myPermutationsEnumerator;
         }
 
         /// <summary>

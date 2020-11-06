@@ -144,182 +144,57 @@ namespace Combinatorics.Collections
         /// Gets an enumerator for collecting the list of permutations.
         /// </summary>
         /// <returns>The enumerator.</returns>
-        public IEnumerator<IReadOnlyList<T>> GetEnumerator() => new Enumerator(this);
-
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-
-        /// <summary>
-        /// The enumerator that enumerates each meta-collection of the enclosing Permutations class.
-        /// </summary>
-        public sealed class Enumerator : IEnumerator<IReadOnlyList<T>>
+        public IEnumerator<IReadOnlyList<T>> GetEnumerator()
         {
-            /// <summary>
-            /// Construct a enumerator with the parent object.
-            /// </summary>
-            /// <param name="source">The source Permutations object.</param>
-            public Enumerator(Permutations<T> source)
+            var lexicographicalOrders = _myLexicographicOrders.ToArray();
+            var values = new List<T>(_myValues);
+            yield return AllowMutation ? _myValues : new List<T>(_myValues);
+            if (values.Count < 2)
+                yield break;
+
+            while (true)
             {
-                _ = source ?? throw new ArgumentNullException(nameof(source));
-                _myParent = source;
-                _myLexicographicalOrders = new int[source._myLexicographicOrders.Length];
-                _myValues = new List<T>(source._myValues.Count);
-                source._myLexicographicOrders.CopyTo(_myLexicographicalOrders, 0);
-                _myPosition = Position.BeforeFirst;
-            }
+                var i = lexicographicalOrders.Length - 1;
 
-            void IEnumerator.Reset() => throw new NotSupportedException();
-
-            /// <summary>
-            /// Advances to the next permutation.
-            /// </summary>
-            /// <returns>True if successfully moved to next permutation, False if no more permutations exist.</returns>
-            /// <remarks>
-            /// Continuation was tried (i.e. yield return) by was not nearly as efficient.
-            /// Performance is further increased by using value types and removing generics, that is, the LexicographicOrder parellel array.
-            /// This is a issue with the .NET CLR not optimizing as well as it could in this infrequently used scenario.
-            /// </remarks>
-            public bool MoveNext()
-            {
-                switch (_myPosition)
-                {
-                    case Position.BeforeFirst:
-                        _myValues.AddRange(_myParent._myValues);
-                        _myPosition = Position.InSet;
-                        break;
-                    case Position.InSet:
-                        if (_myValues.Count < 2)
-                        {
-                            _myPosition = Position.AfterLast;
-                        }
-                        else if (!NextPermutation())
-                        {
-                            _myPosition = Position.AfterLast;
-                        }
-                        break;
-                    case Position.AfterLast:
-                        break;
-                    default:
-                        throw new ArgumentOutOfRangeException();
-                }
-                return _myPosition != Position.AfterLast;
-            }
-
-            object IEnumerator.Current => Current;
-
-            /// <summary>
-            /// The current permutation.
-            /// </summary>
-            public IReadOnlyList<T> Current
-            {
-                get
-                {
-                    if (_myPosition != Position.InSet)
-                        throw new InvalidOperationException();
-
-                    return _myParent.AllowMutation ? _myValues : new List<T>(_myValues);
-                }
-            }
-
-            /// <inheritdoc />
-            public void Dispose()
-            {
-            }
-
-            /// <summary>
-            /// Calculates the next lexicographical permutation of the set.
-            /// This is a permutation with repetition where values that compare as equal will not 
-            /// swap positions to create a new permutation.
-            /// http://www.cut-the-knot.org/do_you_know/AllPerm.shtml
-            /// E. W. Dijkstra, A Discipline of Programming, Prentice-Hall, 1997  
-            /// </summary>
-            /// <returns>True if a new permutation has been returned, false if not.</returns>
-            /// <remarks>
-            /// This uses the integers of the lexicographical order of the values so that any
-            /// comparison of values are only performed during initialization. 
-            /// </remarks>
-            private bool NextPermutation()
-            {
-                T valueTemp;
-                int orderTemp;
-                var i = _myLexicographicalOrders.Length - 1;
-
-                while (_myLexicographicalOrders[i - 1] >= _myLexicographicalOrders[i])
+                while (lexicographicalOrders[i - 1] >= lexicographicalOrders[i])
                 {
                     --i;
                     if (i == 0)
-                    {
-                        return false;
-                    }
+                        yield break;
                 }
 
-                var j = _myLexicographicalOrders.Length;
+                var j = lexicographicalOrders.Length;
 
-                while (_myLexicographicalOrders[j - 1] <= _myLexicographicalOrders[i - 1])
-                {
+                while (lexicographicalOrders[j - 1] <= lexicographicalOrders[i - 1])
                     --j;
-                }
 
-                Swap(i - 1, j - 1, out valueTemp, out orderTemp);
+                Swap(i - 1, j - 1);
 
                 ++i;
 
-                j = _myLexicographicalOrders.Length;
-
+                j = lexicographicalOrders.Length;
                 while (i < j)
                 {
-                    Swap(i - 1, j - 1, out valueTemp, out orderTemp);
+                    Swap(i - 1, j - 1);
                     ++i;
                     --j;
                 }
-                return true;
+
+                yield return AllowMutation ? _myValues : new List<T>(_myValues);
             }
 
-            /// <summary>
-            /// Helper function for swapping two elements within the internal collection.
-            /// This swaps both the lexicographical order and the values, maintaining the parallel array.
-            /// </summary>
-            private void Swap(int i, int j, out T valueTemp, out int orderTemp)
+            void Swap(int i, int j)
             {
-                valueTemp = _myValues[i];
-                _myValues[i] = _myValues[j];
-                _myValues[j] = valueTemp;
-                orderTemp = _myLexicographicalOrders[i];
-                _myLexicographicalOrders[i] = _myLexicographicalOrders[j];
-                _myLexicographicalOrders[j] = orderTemp;
-            }
-
-            /// <summary>
-            /// Flag indicating the position of the enumerator.
-            /// </summary>
-            private Position _myPosition = Position.BeforeFirst;
-
-            /// <summary>
-            /// Parallel array of integers that represent the location of items in the myValues array.
-            /// This is generated at Initialization and is used as a performance speed up rather that
-            /// comparing T each time, much faster to let the CLR optimize around integers.
-            /// </summary>
-            private readonly int[] _myLexicographicalOrders;
-
-            /// <summary>
-            /// The list of values that are current to the enumerator.
-            /// </summary>
-            private readonly List<T> _myValues;
-
-            /// <summary>
-            /// The set of permutations that this enumerator enumerates.
-            /// </summary>
-            private readonly Permutations<T> _myParent;
-
-            /// <summary>
-            /// Internal position type for tracking enumerator position.
-            /// </summary>
-            private enum Position
-            {
-                BeforeFirst,
-                InSet,
-                AfterLast
+                var valueTemp = values[i];
+                values[i] = values[j];
+                values[j] = valueTemp;
+                var orderTemp = lexicographicalOrders[i];
+                lexicographicalOrders[i] = lexicographicalOrders[j];
+                lexicographicalOrders[j] = orderTemp;
             }
         }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
         /// <summary>
         /// The count of all permutations that will be returned.

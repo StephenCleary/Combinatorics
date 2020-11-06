@@ -111,7 +111,7 @@ namespace Combinatorics.Collections
             public Enumerator(Combinations<T> source)
             {
                 _myParent = source;
-                _myPermutationsEnumerator = (Permutations<bool>.Enumerator)_myParent._myPermutations.GetEnumerator();
+                _myPermutationsEnumerator = _myParent._myPermutations.GetEnumerator();
             }
 
             void IEnumerator.Reset() => throw new NotSupportedException();
@@ -210,7 +210,7 @@ namespace Combinatorics.Collections
             /// <summary>
             /// An enumerator of the parents list of lexicographic orderings.
             /// </summary>
-            private readonly Permutations<bool>.Enumerator _myPermutationsEnumerator;
+            private readonly IEnumerator<IReadOnlyList<bool>> _myPermutationsEnumerator;
         }
 
         /// <summary>
